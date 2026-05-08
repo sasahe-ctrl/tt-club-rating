@@ -623,7 +623,7 @@ async function handleCoachClick(item, clickedBtn) {
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (res.ok) {
       const json = await res.json();
-      if (json.ok && json.canRate === false) canRate = false;
+      if (json.code === 2001) canRate = false;
     }
   } catch (_) {
     canRate = true; // 网络异常默认放行
@@ -791,7 +791,7 @@ async function handleSubmit() {
   try {
     const res = await fetch(GAS_URL, {
       method:  'POST',
-      headers: { 'Content-Type': 'text/plain' },
+      headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
       signal:  AbortSignal.timeout(12000),
     });
@@ -802,9 +802,9 @@ async function handleSubmit() {
     try { json = await res.json(); }
     catch { throw new Error('parse_error'); }
 
-    if (json.ok) {
-      showSuccessPage(selectedCoach.name, json.count);
-    } else if (json.error === 'duplicate') {
+    if (json.code === 0) {
+      showSuccessPage(selectedCoach.name, json.data.raterCount);
+    } else if (json.code === 2001) {
       showRatedPage(selectedCoach.name);
     } else {
       throw new Error('server_error');
