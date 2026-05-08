@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>教练评分 · TT CLUB & 广粤会</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #F5EDD8;
+      --gold:         #B8860B;
+      --gold-light:   #D4A845;
+      --gold-deep:    #8B6914;
+      --beige-card:   #FAF6EC;
+      --beige-border: #E8DCB8;
+      --beige-hover:  #F5EDD8;
+      --star-empty:   #E8DCB8;
+      --text-main:    #3D3527;
+      --text-body:    #5C503E;
+      --text-sub:     #7A6F5A;
+      --radius:       8px;
+      --font:         -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      font-family: var(--font);
+      color: var(--text-body);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page {
+      display: none;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+      min-height: 100vh;
+    }
+    .page.active { display: block; }
+
+    #page-rated,
+    #page-success { padding: 0; }
+
+    /* ---- 品牌小标 ---- */
+    .brand {
+      font-size: 11px;
+      color: var(--gold);
+      letter-spacing: 0.1em;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: 0.01em;
+    }
+    .page-sub {
+      margin-top: 6px;
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    /* ================================================================
+       【修订 1 & 2】选课表页：按周几排，7 个按钮，今日高亮
+    ================================================================ */
+    .schedule-list {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .schedule-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      min-height: 70px;
+      background: var(--beige-card);
+      border: 1px solid var(--beige-border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      width: 100%;
+      position: relative;
+    }
+    .schedule-btn:active,
+    .schedule-btn:hover {
+      background: var(--beige-hover);
+      border-color: var(--gold);
+    }
+
+    /* 今日高亮状态 */
+    .schedule-btn.today {
+      background: var(--gold);
+      border-color: var(--gold);
+      box-shadow: 0 3px 10px rgba(184, 134, 11, 0.28);
+    }
+    .schedule-btn.today:active,
+    .schedule-btn.today:hover {
+      background: var(--gold-deep);
+      border-color: var(--gold-deep);
+    }
+
+    /* loading 时全部变灰 */
+    .schedule-btn.loading {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* 三行文字区 */
+    .schedule-info { display: flex; flex-direction: column; gap: 2px; }
+
+    .schedule-day {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.3;
+    }
+    .schedule-btn.today .schedule-day { color: #FAF6EC; }
+
+    .schedule-coach {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1.3;
+    }
+    .schedule-btn.today .schedule-coach { color: #fff; }
+
+    .schedule-course {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.3;
+    }
+    .schedule-btn.today .schedule-course { color: #FAF6EC; }
+
+    /* 今日小标签（右侧） */
+    .today-badge {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gold-deep);
+      background: #fff;
+      border-radius: 4px;
+      padding: 3px 8px;
+      letter-spacing: 0.03em;
+    }
+
+    /* 按钮右侧 spinner（非今日按钮用） */
+    .btn-spinner {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--beige-border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .schedule-btn.loading .btn-spinner { display: block; }
+    /* 今日按钮 loading 时 spinner 反白 */
+    .schedule-btn.today.loading .btn-spinner {
+      border-color: rgba(255,255,255,0.4);
+      border-top-color: #fff;
+    }
+
+    .select-footer {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    /* ================================================================
+       评分表单页
+    ================================================================ */
+
+    /* 【修订 4】顶部信息卡片：居中，三级视觉权重 */
+    .info-bar {
+      background: var(--beige-card);
+      border: 1px solid var(--beige-border);
+      border-radius: 12px;
+      padding: 22px 20px 18px;
+      margin-bottom: 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .info-date {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.4;
+    }
+
+    .info-coach-name {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-top: 10px;
+      line-height: 1.2;
+      letter-spacing: 0.01em;
+    }
+
+    .info-gold-line {
+      width: 30px;
+      height: 2px;
+      background: var(--gold);
+      margin: 10px 0 10px;
+      border-radius: 1px;
+    }
+
+    .info-venue {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.4;
+    }
+
+    /* 问题卡片 */
+    .question-card {
+      background: var(--beige-card);
+      border: 1px solid var(--beige-border);
+      border-radius: var(--radius);
+      padding: 18px 16px 20px;
+      margin-bottom: 10px;
+    }
+    .q-main {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+    .q-sub {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    /* 星级：题 1-4 */
+    .stars {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .star {
+      font-size: 30px;
+      cursor: pointer;
+      color: var(--star-empty);
+      transition: color 0.1s, transform 0.08s;
+      line-height: 1;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .star.filled { color: var(--gold); }
+    .star:active  { transform: scale(0.88); }
+
+    /* 题 5：每颗星带锚点文字 */
+    .stars-q5 {
+      display: flex;
+      gap: 4px;
+      margin-top: 14px;
+      justify-content: space-between;
+    }
+    .star-item-q5 {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      flex: 1;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      padding: 4px 0;
+    }
+    .star-item-q5 .star { font-size: 24px; }
+    .star-label {
+      font-size: 9.5px;
+      color: var(--text-sub);
+      text-align: center;
+      line-height: 1.3;
+      word-break: break-all;
+      transition: color 0.1s, font-weight 0.1s;
+    }
+    .star-item-q5.selected .star-label {
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    /* 选填文字框 */
+    .textarea-card {
+      background: var(--beige-card);
+      border: 1px solid var(--beige-border);
+      border-radius: var(--radius);
+      padding: 18px 16px 14px;
+      margin-bottom: 18px;
+    }
+    .textarea-label { font-size: 16px; font-weight: 600; color: var(--text-main); }
+    .textarea-sub   { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+
+    textarea {
+      width: 100%;
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--beige-border);
+      border-radius: 6px;
+      font-family: var(--font);
+      font-size: 15px;
+      color: var(--text-body);
+      resize: none;
+      min-height: 84px;
+      outline: none;
+      transition: border-color 0.15s;
+      display: block;
+    }
+    textarea:focus        { border-color: var(--gold); }
+    textarea::placeholder { color: var(--beige-border); }
+
+    .char-count {
+      text-align: right;
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-top: 5px;
+    }
+
+    /* 提交按钮 */
+    .submit-btn {
+      width: 100%;
+      min-height: 52px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .submit-btn.enabled       { background: var(--gold);        color: #fff; }
+    .submit-btn.disabled      { background: var(--beige-border); color: var(--text-sub); cursor: not-allowed; }
+    .submit-btn.loading-state { background: var(--gold-light);   color: #fff; cursor: not-allowed; }
+
+    .submit-error {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #9B4F2A;
+      text-align: center;
+      line-height: 1.5;
+    }
+    .anon-note {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: 14px;
+    }
+
+    /* ================================================================
+       居中页（已评过 / 提交成功）
+    ================================================================ */
+    .center-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 48px 28px;
+      text-align: center;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .big-emoji    { font-size: 54px; line-height: 1; margin-bottom: 20px; }
+    .center-title { font-size: 24px; font-weight: 700; color: var(--text-main); }
+    .center-sub   { margin-top: 8px; font-size: 15px; color: var(--text-body); }
+
+    .center-data {
+      margin-top: 24px;
+      padding: 16px 22px;
+      background: var(--beige-card);
+      border: 1px solid var(--beige-border);
+      border-radius: var(--radius);
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.8;
+      width: 100%;
+    }
+    .center-data .count-num {
+      color: var(--gold);
+      font-size: 26px;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .center-footer {
+      margin-top: 28px;
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.6;
+    }
+
+    .text-link-btn {
+      margin-top: 28px;
+      background: none;
+      border: 1px solid var(--beige-border);
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 14px;
+      color: var(--gold);
+      cursor: pointer;
+      padding: 12px 24px;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    .text-link-btn:active,
+    .text-link-btn:hover { background: var(--beige-card); }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     页面 1：按课表选课
+================================================================ -->
+<div id="page-select" class="page active">
+  <div class="brand">TT CLUB &amp; 广粤会</div>
+  <div class="page-title">今天上的是谁的课?</div>
+  <div class="page-sub">选一下，30 秒就能填完</div>
+  <div class="schedule-list" id="scheduleList"></div>
+  <div class="select-footer">匿名提交 · 教练不会知道是谁评的</div>
+</div>
+
+<!-- ================================================================
+     页面 2：评分表单
+================================================================ -->
+<div id="page-rating" class="page">
+
+  <div class="info-bar" id="infoBar"></div>
+
+  <div class="question-card">
+    <div class="q-main">这堂课你满意吗?</div>
+    <div class="q-sub">综合感受，包括内容、节奏、效果</div>
+    <div class="stars" id="stars-q1"></div>
+  </div>
+
+  <div class="question-card">
+    <div class="q-main" id="q2-main"></div>
+    <div class="q-sub">动作示范清不清楚、讲解听不听得懂、有没有帮你纠正动作</div>
+    <div class="stars" id="stars-q2"></div>
+  </div>
+
+  <div class="question-card">
+    <div class="q-main">课堂氛围如何?</div>
+    <div class="q-sub">有没有激情、有没有带动你、有没有冷场</div>
+    <div class="stars" id="stars-q3"></div>
+  </div>
+
+  <div class="question-card">
+    <div class="q-main">强度合不合适?</div>
+    <div class="q-sub">动作难度对你来说刚好吗？有没有给新手或老手不同选项</div>
+    <div class="stars" id="stars-q4"></div>
+  </div>
+
+  <div class="question-card">
+    <div class="q-main" id="q5-main"></div>
+    <div class="stars-q5" id="stars-q5"></div>
+  </div>
+
+  <div class="textarea-card">
+    <div class="textarea-label">想说点什么?</div>
+    <div class="textarea-sub">你的反馈会直接到管理者，不会透露给教练</div>
+    <textarea
+      id="feedbackText"
+      maxlength="100"
+      placeholder="比如：今天那段拳腿组合好上头! / 希望音乐再大声一点"
+    ></textarea>
+    <div class="char-count"><span id="charCount">0</span>/100</div>
+  </div>
+
+  <button class="submit-btn disabled" id="submitBtn" disabled>还有 5 题没评</button>
+  <div class="submit-error" id="submitError" style="display:none"></div>
+  <div class="anon-note">匿名提交 · 教练不会知道是谁评的</div>
+</div>
+
+<!-- ================================================================
+     页面 3：今天已评过
+================================================================ -->
+<div id="page-rated" class="page">
+  <div class="center-page">
+    <div class="big-emoji">✨</div>
+    <div class="center-title" id="ratedTitle"></div>
+    <div class="center-sub">期待下节课见</div>
+    <button class="text-link-btn" id="backBtn">换一位教练评分</button>
+  </div>
+</div>
+
+<!-- ================================================================
+     页面 4：提交成功
+================================================================ -->
+<div id="page-success" class="page">
+  <div class="center-page">
+    <div class="big-emoji">🙏</div>
+    <div class="center-title">谢谢你</div>
+    <div class="center-sub">你的反馈我们已经收到</div>
+    <div class="center-data" id="successData"></div>
+    <div class="center-footer">下次扫桌上的二维码，就能继续评分啦</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  ★ 部署完 Google Apps Script 后，把下面这行的网址替换掉 ★
+//  例如：const GAS_URL = 'https://script.google.com/macros/s/xxx/exec';
+// ============================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyR2x6I0jnmSYm6AUbaLnOR7A_FvKSPfAZiXbXwLfvLRW1BbqiUIYQWmcyxoYRcEJJlrg/exec';
+
+// ============================================================
+//  【修订 1】课表数据（按周一→周日顺序，day=0 的周日放最后）
+// ============================================================
+const SCHEDULE = [
+  { day: 1, dayLabel: '周一', coach: 'Steven', course: '身心平衡' },
+  { day: 2, dayLabel: '周二', coach: '孙欢',   course: '形体舞'   },
+  { day: 3, dayLabel: '周三', coach: '孙铃',   course: '核心训练' },
+  { day: 4, dayLabel: '周四', coach: 'Abby',   course: '尊巴'     },
+  { day: 5, dayLabel: '周五', coach: '孙铃',   course: '搏击训练' },
+  { day: 6, dayLabel: '周六', coach: '边边',   course: '普拉提'   },
+  { day: 0, dayLabel: '周日', coach: '小羊',   course: '瑜伽'     },
+];
+
+const Q5_LABELS = ['肯定不会', '应该不会', '看心情', '大概率会', '一定会,已是铁粉'];
+
+// ============================================================
+//  当前状态
+// ============================================================
+let selectedCoach = null; // { name, course }
+const ratings = { q1:0, q2:0, q3:0, q4:0, q5:0 };
+
+// ============================================================
+//  UUID
+// ============================================================
+function getUUID() {
+  let uuid = localStorage.getItem('rating_uuid');
+  if (!uuid) {
+    uuid = crypto.randomUUID();
+    localStorage.setItem('rating_uuid', uuid);
+  }
+  return uuid;
+}
+
+// ============================================================
+//  日期格式化 → "5月8日 周四"
+// ============================================================
+function formatToday() {
+  const now  = new Date();
+  const m    = now.getMonth() + 1;
+  const d    = now.getDate();
+  const days = ['周日','周一','周二','周三','周四','周五','周六'];
+  return `${m}月${d}日 ${days[now.getDay()]}`;
+}
+
+// ============================================================
+//  页面切换
+// ============================================================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ============================================================
+//  【修订 1 & 2】渲染课表按钮，今日自动高亮
+// ============================================================
+function initScheduleList() {
+  const list    = document.getElementById('scheduleList');
+  const todayDay = new Date().getDay(); // 0=周日, 1=周一 ... 6=周六
+
+  SCHEDULE.forEach(item => {
+    const isToday = item.day === todayDay;
+    const btn     = document.createElement('button');
+    btn.className = 'schedule-btn' + (isToday ? ' today' : '');
+
+    btn.innerHTML = `
+      <div class="schedule-info">
+        <span class="schedule-day">${item.dayLabel}</span>
+        <span class="schedule-coach">${item.coach}</span>
+        <span class="schedule-course">${item.course}</span>
+      </div>
+      ${isToday ? '<span class="today-badge">今日</span>' : '<span class="btn-spinner"></span>'}
+    `;
+
+    btn.addEventListener('click', () => handleCoachClick(item, btn));
+    list.appendChild(btn);
+  });
+}
+
+// ============================================================
+//  点击某节课 → GET 检查 → 路由到对应页面
+// ============================================================
+async function handleCoachClick(item, clickedBtn) {
+  document.querySelectorAll('.schedule-btn').forEach(b => b.classList.add('loading'));
+
+  // 统一 selectedCoach 接口，其余代码不需改
+  selectedCoach = { name: item.coach, course: item.course };
+
+  const uuid = getUUID();
+  let canRate = true;
+
+  try {
+    const url = `${GAS_URL}?uuid=${encodeURIComponent(uuid)}&coach=${encodeURIComponent(item.coach)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.ok && json.canRate === false) canRate = false;
+    }
+  } catch (_) {
+    canRate = true; // 网络异常默认放行
+  }
+
+  document.querySelectorAll('.schedule-btn').forEach(b => b.classList.remove('loading'));
+
+  if (canRate) {
+    enterRatingPage(selectedCoach);
+  } else {
+    showRatedPage(item.coach);
+  }
+}
+
+// ============================================================
+//  进入评分表单页
+// ============================================================
+function enterRatingPage(coach) {
+  Object.keys(ratings).forEach(k => ratings[k] = 0);
+
+  // 【修订 4】三级视觉层次的信息卡片
+  document.getElementById('infoBar').innerHTML = `
+    <div class="info-date">🕐 ${formatToday()}</div>
+    <div class="info-coach-name">${coach.name}</div>
+    <div class="info-gold-line"></div>
+    <div class="info-venue">📍 TT CLUB & 广粤会</div>
+  `;
+
+  document.getElementById('q2-main').textContent = `${coach.name} 的专业度怎么样？`;
+  document.getElementById('q5-main').textContent = `你会再上 ${coach.name} 的课吗？`;
+
+  ['q1','q2','q3','q4'].forEach(q => renderStars(q));
+  renderStarsQ5();
+
+  document.getElementById('feedbackText').value = '';
+  document.getElementById('charCount').textContent = '0';
+  document.getElementById('submitError').style.display = 'none';
+
+  updateSubmitButton();
+  showPage('page-rating');
+}
+
+// ============================================================
+//  星级渲染（题 1-4）
+// ============================================================
+function renderStars(qKey) {
+  const container = document.getElementById(`stars-${qKey}`);
+  container.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const span = document.createElement('span');
+    span.className   = 'star';
+    span.textContent = '★';
+    span.dataset.val = i;
+    span.addEventListener('click', () => {
+      ratings[qKey] = i;
+      refreshStars(qKey);
+      updateSubmitButton();
+    });
+    container.appendChild(span);
+  }
+  refreshStars(qKey);
+}
+
+function refreshStars(qKey) {
+  const val = ratings[qKey];
+  document.querySelectorAll(`#stars-${qKey} .star`).forEach(s => {
+    s.classList.toggle('filled', parseInt(s.dataset.val) <= val);
+  });
+}
+
+// ============================================================
+//  星级渲染（题 5，带锚点文字）
+// ============================================================
+function renderStarsQ5() {
+  const container = document.getElementById('stars-q5');
+  container.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const item = document.createElement('div');
+    item.className   = 'star-item-q5';
+    item.dataset.val = i;
+    item.innerHTML   = `
+      <span class="star">★</span>
+      <span class="star-label">${Q5_LABELS[i - 1]}</span>
+    `;
+    item.addEventListener('click', () => {
+      ratings.q5 = i;
+      refreshStarsQ5();
+      updateSubmitButton();
+    });
+    container.appendChild(item);
+  }
+}
+
+function refreshStarsQ5() {
+  const val = ratings.q5;
+  document.querySelectorAll('#stars-q5 .star-item-q5').forEach(item => {
+    const v = parseInt(item.dataset.val);
+    item.querySelector('.star').classList.toggle('filled', v <= val);
+    item.classList.toggle('selected', v === val);
+  });
+}
+
+// ============================================================
+//  字数统计
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('feedbackText').addEventListener('input', () => {
+    document.getElementById('charCount').textContent =
+      document.getElementById('feedbackText').value.length;
+  });
+
+  document.getElementById('submitBtn').addEventListener('click', handleSubmit);
+
+  document.getElementById('backBtn').addEventListener('click', () => {
+    selectedCoach = null;
+    showPage('page-select');
+  });
+});
+
+// ============================================================
+//  提交按钮状态
+// ============================================================
+function updateSubmitButton() {
+  const btn       = document.getElementById('submitBtn');
+  const answered  = Object.values(ratings).filter(v => v > 0).length;
+  const remaining = 5 - answered;
+
+  if (remaining > 0) {
+    btn.className   = 'submit-btn disabled';
+    btn.textContent = `还有 ${remaining} 题没评`;
+    btn.disabled    = true;
+  } else {
+    btn.className   = 'submit-btn enabled';
+    btn.textContent = '提交评分';
+    btn.disabled    = false;
+  }
+}
+
+// ============================================================
+//  提交
+// ============================================================
+async function handleSubmit() {
+  const btn   = document.getElementById('submitBtn');
+  const errEl = document.getElementById('submitError');
+
+  btn.className   = 'submit-btn loading-state';
+  btn.textContent = '提交中...';
+  btn.disabled    = true;
+  errEl.style.display = 'none';
+
+  const payload = {
+    uuid:    getUUID(),
+    coach:   selectedCoach.name,
+    course:  selectedCoach.course, // 【修订 3】传真实课程名存档，后端不用它判重
+    scores: {
+      satisfaction:    ratings.q1,
+      professionalism: ratings.q2,
+      atmosphere:      ratings.q3,
+      intensity:       ratings.q4,
+      recommendation:  ratings.q5,
+    },
+    feedback: document.getElementById('feedbackText').value.trim(),
+  };
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body:    JSON.stringify(payload),
+      signal:  AbortSignal.timeout(12000),
+    });
+
+    if (!res.ok) throw new Error('http_error');
+
+    let json;
+    try { json = await res.json(); }
+    catch { throw new Error('parse_error'); }
+
+    if (json.ok) {
+      showSuccessPage(selectedCoach.name, json.count);
+    } else if (json.error === 'duplicate') {
+      showRatedPage(selectedCoach.name);
+    } else {
+      throw new Error('server_error');
+    }
+
+  } catch (_) {
+    btn.className       = 'submit-btn enabled';
+    btn.textContent     = '提交评分';
+    btn.disabled        = false;
+    errEl.textContent   = '网络似乎不太稳定，请稍后再试';
+    errEl.style.display = 'block';
+  }
+}
+
+// ============================================================
+//  已评过页 / 成功页
+// ============================================================
+function showRatedPage(coachName) {
+  document.getElementById('ratedTitle').textContent =
+    `你今天已经为 ${coachName} 评过分了`;
+  showPage('page-rated');
+}
+
+function showSuccessPage(coachName, count) {
+  document.getElementById('successData').innerHTML =
+    `<span class="count-num">${count}</span>你是本月第 ${count} 位评价 ${coachName} 的会员`;
+  showPage('page-success');
+}
+
+// ============================================================
+//  启动
+// ============================================================
+initScheduleList();
+</script>
+</body>
+</html>
