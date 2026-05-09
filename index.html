@@ -340,6 +340,18 @@
     display: inline-flex; align-items: center; gap: 8px;
   }
   .success-btn:active { border-color: var(--green); color: var(--green); }
+
+  /* ── 快捷标签 ── */
+  .quick-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .qtag {
+    padding: 6px 14px; border-radius: 20px;
+    border: 1px solid var(--border); background: none;
+    color: var(--text-dim); font-size: 12px;
+    font-family: 'Noto Sans SC', sans-serif;
+    cursor: pointer; transition: border-color 0.2s, color 0.2s, background 0.2s;
+  }
+  .qtag:active { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+  .qtag.used { border-color: var(--green); color: var(--green); background: var(--green-dim); }
 </style>
 </head>
 <body>
@@ -407,7 +419,15 @@
     <div class="feedback-section">
       <div class="feedback-label">留言建议<span>可选</span></div>
       <div class="feedback-sub">你的反馈会直接到管理者，不会透露给教练</div>
-      <textarea class="feedback-input" id="feedbackText" maxlength="100"
+      <div class="quick-tags" id="quickTags">
+      <button class="qtag" onclick="addTag('音乐太小')">音乐太小</button>
+      <button class="qtag" onclick="addTag('动作太快')">动作太快</button>
+      <button class="qtag" onclick="addTag('氛围很好')">氛围很好</button>
+      <button class="qtag" onclick="addTag('讲解清晰')">讲解清晰</button>
+      <button class="qtag" onclick="addTag('强度刚好')">强度刚好</button>
+      <button class="qtag" onclick="addTag('希望多互动')">希望多互动</button>
+    </div>
+    <textarea class="feedback-input" id="feedbackText" maxlength="100"
         placeholder="比如：今天那段组合好上头 / 希望音乐再大声一点" rows="3"></textarea>
       <div class="feedback-count"><span id="feedbackCount">0</span>/100</div>
     </div>
@@ -476,6 +496,18 @@ function soundStar(i)     { const f=[261,294,329,392,523]; playTone(f[i]||523,'t
 function soundSubmit()    { playTone(300,'sine',0.08,0.18); playTone(400,'sine',0.08,0.18,0.08); playTone(520,'sine',0.12,0.2,0.16); }
 function soundSuccess()   { playTone(440,'triangle',0.15,0.3,0); playTone(554,'triangle',0.15,0.3,0.15); playTone(659,'triangle',0.25,0.35,0.3); playTone(80,'sine',0.12,0.35,0); }
 function soundDuplicate() { playTone(220,'sawtooth',0.15,0.15); playTone(180,'sawtooth',0.2,0.15,0.15); }
+
+// ══ 快捷标签 ══
+function addTag(text) {
+  const el = document.getElementById('feedbackText');
+  const cur = el.value.trim();
+  if (cur.includes(text)) return;
+  el.value = cur ? cur + ' ' + text : text;
+  document.getElementById('feedbackCount').textContent = el.value.length;
+  document.querySelectorAll('.qtag').forEach(b => {
+    if (b.textContent === text) b.classList.add('used');
+  });
+}
 
 // ══ 数据 ══
 const COACHES = [
@@ -551,6 +583,7 @@ async function handleCoachClick(coach) {
   ['q1','q2','q3','q4','q5'].forEach(renderStars);
   document.getElementById('feedbackText').value = '';
   document.getElementById('feedbackCount').textContent = '0';
+  document.querySelectorAll('.qtag').forEach(b => b.classList.remove('used'));
   document.getElementById('submitError').style.display = 'none';
   const btn = document.getElementById('submitBtn');
   btn.disabled = false; btn.innerHTML = '&#9993;&nbsp; 提交反馈';
