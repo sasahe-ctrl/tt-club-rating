@@ -159,6 +159,39 @@
 
   /* 空状态 */
   .empty { text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px; }
+
+  /* ── Tab 导航 ── */
+  .tab-bar {
+    display: flex; background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px; gap: 0;
+    position: sticky; top: 57px; z-index: 99;
+  }
+  .tab-btn {
+    flex: 1; padding: 12px 0; font-size: 13px; font-weight: 700;
+    color: var(--text-dim); background: none; border: none;
+    border-bottom: 2px solid transparent; cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* ── 日期统计 ── */
+  .date-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .date-table th {
+    text-align: left; padding: 8px 10px;
+    font-size: 10px; font-weight: 700; color: var(--gold);
+    letter-spacing: 1px; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .date-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .date-table tr:last-child td { border-bottom: none; }
+  .date-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; background: rgba(184,134,11,0.1);
+    color: var(--gold); border: 1px solid rgba(184,134,11,0.25);
+    margin: 2px 2px 2px 0;
+  }
+  .date-total { font-size: 18px; font-weight: 700; color: var(--gold); }
 </style>
 </head>
 <body>
@@ -191,6 +224,11 @@
     </div>
     <button class="logout-btn" onclick="doLogout()">退出</button>
   </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('overview')">教练概览</button>
+    <button class="tab-btn" onclick="switchTab('bydate')">按日期统计</button>
+    <button class="tab-btn" onclick="switchTab('feedback')">全部留言</button>
+  </div>
   <div id="content">
     <div class="loading">
       <div style="margin-bottom:12px">数据加载中</div>
@@ -216,38 +254,109 @@ const COACHES = [
 const SCORE_LABELS = ['课程体验','专业感','课堂氛围','强度匹配','愿意推荐'];
 const SCORE_KEYS   = ['satisfaction','expertise','atmosphere','intensity','recommend'];
 
-// ── 登录 ──
-function doLogin() {
-  const u = document.getElementById('username').value.trim();
-  const p = document.getElementById('password').value.trim();
-  if (u === 'sakurako' && p === '0000') {
-    document.getElementById('login-page').style.display = 'none';
-    document.getElementById('main-page').style.display = 'block';
-    loadData();
-  } else {
-    document.getElementById('login-error').style.display = 'block';
+let _allRecords = [];
+let _currentTab = 'overview';
+
+// ── Tab 切换 ──
+function switchTab(tab) {
+  _currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', ['overview','bydate','feedback'][i] === tab);
+  });
+  if (_allRecords.length) renderTab(tab, _allRecords);
+}
+
+function renderTab(tab, records) {
+  if (tab === 'overview')  renderOverview(records);
+  if (tab === 'bydate')    renderByDate(records);
+  if (tab === 'feedback')  renderFeedback(records);
+}
+
+// ── 按日期统计 ──
+function renderByDate(records) {
+  // 按日期分组
+  const dateMap = {};
+  records.forEach(r => {
+    const date = r.submitTime ? r.submitTime.substring(0, 10) : '未知';
+    if (!dateMap[date]) dateMap[date] = [];
+    dateMap[date].push(r);
+  });
+
+  const dates = Object.keys(dateMap).sort().reverse();
+
+  let html = `<div class="section" style="margin-bottom:16px;">
+    <div class="section-title">按日期统计</div>
+    <div class="all-feedback-card">
+      <table class="date-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>条数</th>
+            <th>教练</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+  dates.forEach(date => {
+    const rows = dateMap[date];
+    // 按教练统计
+    const coachCount = {};
+    rows.forEach(r => {
+      coachCount[r.coach] = (coachCount[r.coach] || 0) + 1;
+    });
+    const coachTags = Object.entries(coachCount)
+      .map(([name, cnt]) => `<span class="date-tag">${name} ×${cnt}</span>`)
+      .join('');
+
+    html += `<tr>
+      <td style="font-size:13px;font-weight:700;white-space:nowrap;">${date}</td>
+      <td><span class="date-total">${rows.length}</span></td>
+      <td>${coachTags}</td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div></div>`;
+  document.getElementById('content').innerHTML = html;
+}
+
+// ── 全部留言 ──
+function renderFeedback(records) {
+  const allFeedbacks = records.filter(r => r.feedback && r.feedback.trim());
+  if (!allFeedbacks.length) {
+    document.getElementById('content').innerHTML = '<div class="empty">暂无留言</div>';
+    return;
   }
+  let html = `<div class="section">
+    <div class="section-title">全部留言（${allFeedbacks.length} 条）</div>
+    <div class="all-feedback-card">
+      ${allFeedbacks.slice().reverse().map(r => `<div class="all-fb-item">
+        <div class="all-fb-header">
+          <span class="all-fb-coach">${r.coach}</span>
+          <span class="all-fb-time">${r.submitTime ? r.submitTime.substring(0,10) : ''}</span>
+        </div>
+        <div class="all-fb-text">${r.feedback}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  document.getElementById('content').innerHTML = html;
 }
-
-function doLogout() {
-  document.getElementById('login-page').style.display = 'flex';
-  document.getElementById('main-page').style.display = 'none';
-  document.getElementById('username').value = '';
-  document.getElementById('password').value = '';
-}
-
-// Enter 键登录
-document.getElementById('password').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin();
-});
 
 // ── 拉取数据 ──
 async function loadData() {
+  document.getElementById('content').innerHTML = `<div class="loading">
+    <div style="margin-bottom:12px">数据加载中</div>
+    <span class="loading-dot"></span>
+    <span class="loading-dot"></span>
+    <span class="loading-dot"></span>
+  </div>`;
   try {
     const res = await fetch(API + '?action=admin', { signal: AbortSignal.timeout(15000) });
     const json = await res.json();
     if (json.code === 0 && json.data && json.data.records) {
-      renderDashboard(json.data.records);
+      _allRecords = json.data.records;
+      const now = new Date();
+      document.getElementById('update-time').textContent = '更新于 ' + now.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
+      renderTab(_currentTab, _allRecords);
     } else {
       showError('数据获取失败，请稍后重试');
     }
@@ -260,64 +369,42 @@ function showError(msg) {
   document.getElementById('content').innerHTML = `<div class="loading" style="color:#C0392B">${msg}</div>`;
 }
 
-// ── 渲染 ──
-function renderDashboard(records) {
+// ── 教练概览（原 renderDashboard）──
+function renderOverview(records) {
   const now = new Date();
   const month = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  document.getElementById('update-time').textContent = '更新于 ' + now.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit'});
 
-  // 本月数据
   const monthRecords = records.filter(r => r.submitTime && r.submitTime.startsWith(month));
   const allFeedbacks = records.filter(r => r.feedback && r.feedback.trim());
 
-  // 按教练分组
   const coachMap = {};
   COACHES.forEach(c => { coachMap[c.name] = { ...c, records: [] }; });
   records.forEach(r => {
     if (coachMap[r.coach]) coachMap[r.coach].records.push(r);
-    else if (r.coach) {
-      coachMap[r.coach] = { name: r.coach, course: '', records: [r] };
-    }
+    else if (r.coach) coachMap[r.coach] = { name: r.coach, course: '', records: [r] };
   });
 
-  // 计算总均分
   let totalAvg = 0, totalCount = 0;
   Object.values(coachMap).forEach(c => {
     if (c.records.length) {
-      const avg = SCORE_KEYS.reduce((s, k) => s + avg5(c.records, k), 0) / 5;
-      totalAvg += avg * c.records.length;
+      const a = SCORE_KEYS.reduce((s, k) => s + parseFloat(avg5(c.records, k)), 0) / 5;
+      totalAvg += a * c.records.length;
       totalCount += c.records.length;
     }
   });
   const overallAvg = totalCount ? (totalAvg / totalCount).toFixed(1) : '--';
 
-  let html = '';
-
-  // 概况
-  html += `<div class="section">
+  let html = `<div class="section">
     <div class="section-title">本月概况</div>
     <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-num">${monthRecords.length}</div>
-        <div class="stat-label">本月评价总数</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num">${overallAvg}</div>
-        <div class="stat-label">总体平均分</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num">${records.length}</div>
-        <div class="stat-label">累计评价总数</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-num">${allFeedbacks.length}</div>
-        <div class="stat-label">有留言的评价</div>
-      </div>
+      <div class="stat-card"><div class="stat-num">${monthRecords.length}</div><div class="stat-label">本月评价总数</div></div>
+      <div class="stat-card"><div class="stat-num">${overallAvg}</div><div class="stat-label">总体平均分</div></div>
+      <div class="stat-card"><div class="stat-num">${records.length}</div><div class="stat-label">累计评价总数</div></div>
+      <div class="stat-card"><div class="stat-num">${allFeedbacks.length}</div><div class="stat-label">有留言的评价</div></div>
     </div>
-  </div>`;
+  </div>
+  <div class="section"><div class="section-title">教练详情</div>`;
 
-  // 各教练数据
-  html += `<div class="section"><div class="section-title">教练详情</div>`;
   COACHES.forEach(c => {
     const data = coachMap[c.name];
     if (!data || !data.records.length) {
@@ -335,7 +422,6 @@ function renderDashboard(records) {
     }
     const rs = data.records;
     const fbs = rs.filter(r => r.feedback && r.feedback.trim());
-
     html += `<div class="coach-card">
       <div class="coach-card-header">
         <div class="coach-name-row">
@@ -364,30 +450,33 @@ function renderDashboard(records) {
       </div>` : ''}
     </div>`;
   });
-  html += '</div>';
 
-  // 所有留言
-  if (allFeedbacks.length) {
-    html += `<div class="section">
-      <div class="section-title">全部留言</div>
-      <div class="all-feedback-card">
-        ${allFeedbacks.slice().reverse().map(r => `<div class="all-fb-item">
-          <div class="all-fb-header">
-            <span class="all-fb-coach">${r.coach}</span>
-            <span class="all-fb-time">${r.submitTime ? r.submitTime.substring(0,10) : ''}</span>
-          </div>
-          <div class="all-fb-text">${r.feedback}</div>
-        </div>`).join('')}
-      </div>
-    </div>`;
-  }
-
-  html += `<button class="refresh-btn" onclick="document.getElementById('content').innerHTML='<div class=loading>刷新中...</div>';loadData()">
-    ↻ 刷新数据
-  </button>`;
-
+  html += `</div><button class="refresh-btn" onclick="loadData()">↻ 刷新数据</button>`;
   document.getElementById('content').innerHTML = html;
 }
+function doLogin() {
+  const u = document.getElementById('username').value.trim();
+  const p = document.getElementById('password').value.trim();
+  if (u === 'sakurako' && p === '0000') {
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('main-page').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+function doLogout() {
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('main-page').style.display = 'none';
+  document.getElementById('username').value = '';
+  document.getElementById('password').value = '';
+}
+
+// Enter 键登录
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
 
 function avg5(records, key) {
   if (!records.length) return 0;
